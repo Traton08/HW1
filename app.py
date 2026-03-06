@@ -1,0 +1,3 @@
+with tabs[2]:
+    st.subheader("Model Performance")
+    ...
