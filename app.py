@@ -1,10 +1,8 @@
 import os
 import joblib
-import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-from tensorflow import keras
 
 st.set_page_config(page_title="COVID-19 Mortality Prediction", layout="wide")
 
@@ -22,15 +20,11 @@ def load_artifacts():
         "Random Forest": joblib.load("models/rf.joblib"),
         "XGBoost": joblib.load("models/xgb.joblib"),
     }
-    mlp = keras.models.load_model("models/mlp.keras")
-    preprocessor = joblib.load("models/preprocessor.joblib")
-
     results_df = pd.read_csv("reports/model_results.csv")
     best_params = joblib.load("reports/best_params.joblib")
+    return models, results_df, best_params
 
-    return models, mlp, preprocessor, results_df, best_params
-
-models, mlp, preprocessor, results_df, best_params = load_artifacts()
+models, results_df, best_params = load_artifacts()
 
 st.title("COVID-19 Mortality Prediction — End-to-End App")
 
@@ -41,9 +35,6 @@ tabs = st.tabs([
     "Explainability & Interactive Prediction"
 ])
 
-# -------------------------
-# Tab 1 — Executive Summary
-# -------------------------
 with tabs[0]:
     st.write("""
 Dataset and prediction task
@@ -58,35 +49,10 @@ I started by looking through the dataset using basic descriptive analytics to un
 For explainability, I used SHAP on the best performing tree-based model to see which features had the biggest impact on the mortality predictions. The SHAP results showed that age and severity related factors, especially hospitalized and pneumonia, were the strongest contributors to higher predicted risk. Others like diabetes and hypertension also added risk in many cases. In the Streamlit app, I’ve included an interactive tool where users can adjust different feature values and watch how the predicted probability changes live.
 """)
 
-# -------------------------
-# Tab 2 — Descriptive Analytics
-# -------------------------
 with tabs[1]:
     st.subheader("Descriptive Analytics")
+    st.info("Add your saved EDA plots into the reports/ folder (target + 4 plots + heatmap).")
 
-    st.info("Upload your saved EDA plots into the reports/ folder (target + 4 plots + heatmap). If you don’t have them saved yet, you can add them later.")
-
-    eda_files = [
-        ("reports/target_distribution.png", "Target Distribution"),
-        ("reports/eda1.png", "EDA Plot 1"),
-        ("reports/eda2.png", "EDA Plot 2"),
-        ("reports/eda3.png", "EDA Plot 3"),
-        ("reports/eda4.png", "EDA Plot 4"),
-        ("reports/corr_heatmap.png", "Correlation Heatmap"),
-    ]
-
-    shown_any = False
-    for path, caption in eda_files:
-        if os.path.exists(path):
-            st.image(path, caption=caption, use_container_width=True)
-            shown_any = True
-
-    if not shown_any:
-        st.warning("No EDA PNGs found in reports/. Add them later to complete Tab 2.")
-
-# -------------------------
-# Tab 3 — Model Performance
-# -------------------------
 with tabs[2]:
     st.subheader("Model Performance")
 
@@ -122,13 +88,10 @@ with tabs[2]:
         else:
             st.warning(f"Missing {path} — upload it into reports/.")
 
-    st.write("### MLP Training Loss")
+    st.write("### MLP Training Loss (from notebook)")
     if os.path.exists("reports/mlp_loss.png"):
         st.image("reports/mlp_loss.png", use_container_width=True)
 
-# -------------------------
-# Tab 4 — Explainability & Interactive Prediction
-# -------------------------
 with tabs[3]:
     st.subheader("Explainability (SHAP) — Random Forest")
 
@@ -143,8 +106,7 @@ with tabs[3]:
     st.divider()
     st.subheader("Interactive Prediction")
 
-    model_choices = list(models.keys()) + ["MLP (Keras)"]
-    chosen_model = st.selectbox("Select model", model_choices, index=2)
+    chosen_model = st.selectbox("Select model", list(models.keys()), index=2)
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -181,14 +143,7 @@ with tabs[3]:
     user_df = pd.DataFrame([user_row], columns=FEATURES)
 
     if st.button("Predict"):
-        if chosen_model == "MLP (Keras)":
-            Xp = preprocessor.transform(user_df)
-            if hasattr(Xp, "toarray"):
-                Xp = Xp.toarray()
-            proba = float(mlp.predict(Xp).ravel()[0])
-        else:
-            proba = float(models[chosen_model].predict_proba(user_df)[:, 1][0])
-
+        proba = float(models[chosen_model].predict_proba(user_df)[:, 1][0])
         pred = int(proba >= 0.5)
         st.write(f"Predicted class (1=Death): {pred}")
         st.write(f"Predicted probability: {proba:.3f}")
